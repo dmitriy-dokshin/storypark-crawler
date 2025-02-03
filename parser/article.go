@@ -24,7 +24,12 @@ type Article struct {
 	Title     string    `json:"title"`
 }
 
-func LoadActivities(ctx context.Context, client *http.Client, until time.Time) ([]*Article, error) {
+func LoadActivities(
+	ctx context.Context,
+	logger *slog.Logger,
+	client *http.Client,
+	until time.Time,
+) ([]*Article, error) {
 	exp := regexp.MustCompile("until=[0-9]+")
 	reqStr := exp.ReplaceAllString(constdef.RequestActivity, fmt.Sprintf("until=%v", until.Unix()))
 	req, err := httputil.ParseRequest(ctx, reqStr, nil)
@@ -44,7 +49,7 @@ func LoadActivities(ctx context.Context, client *http.Client, until time.Time) (
 	defer func(reader *gzip.Reader) {
 		err := reader.Close()
 		if err != nil {
-			slog.ErrorContext(ctx, "unable to close gzip reader", err)
+			logger.ErrorContext(ctx, "unable to close gzip reader", "error", err)
 		}
 	}(reader)
 

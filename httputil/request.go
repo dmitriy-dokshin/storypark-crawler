@@ -16,28 +16,29 @@ type THeader struct {
 }
 
 func ParseRequest(ctx context.Context, reqStr string, body io.Reader) (*http.Request, error) {
-	var method, scheme, authority, path string
+	var method, host, path string
 	var headers []*THeader
 	lines := strings.Split(reqStr, "\n")
-	for _, line := range lines {
+	parts := strings.Split(lines[0], " ")
+	if len(parts) != 3 {
+		return nil, xerrors.Errorf("invalid first request line: %s", lines[0])
+	}
+	major, minor, ok := http.ParseHTTPVersion(parts[2])
+	if !ok {
+		return nil, xerrors.Errorf("invalid http version %q", parts[2])
+	}
+	method, path = parts[0], parts[1]
+	for _, line := range lines[1:] {
 		if len(line) == 0 {
 			continue
 		}
-		parts := strings.Split(line, ": ")
+		parts = strings.Split(line, ": ")
 		key := parts[0]
 		value := parts[1]
-		if key[0] == ':' {
-			switch key[1:] {
-			case "method":
-				method = value
-			case "scheme":
-				scheme = value
-			case "authority":
-				authority = value
-			case "path":
-				path = value
-			}
-		} else {
+		switch key {
+		case "Host":
+			host = value
+		default:
 			headers = append(headers, &THeader{
 				Key:   key,
 				Value: value,
@@ -48,12 +49,14 @@ func ParseRequest(ctx context.Context, reqStr string, body io.Reader) (*http.Req
 	if err != nil {
 		return nil, xerrors.Errorf("unable to parse path %v: %w", path, err)
 	}
-	u.Scheme = scheme
-	u.Host = authority
+	u.Scheme = "https"
+	u.Host = host
 	req, err := http.NewRequestWithContext(ctx, method, "", body)
 	if err != nil {
 		return nil, xerrors.Errorf("unable to initialize request: %w", err)
 	}
+	req.ProtoMajor = major
+	req.ProtoMinor = minor
 	req.URL = u
 	for _, header := range headers {
 		req.Header.Add(header.Key, header.Value)

@@ -27,13 +27,19 @@ type Media struct {
 	Type        string `json:"type"`
 	ContentType string `json:"content_type"`
 	OriginalUrl string `json:"original_url"`
+	ResizedUrl  string `json:"resized_url"`
 }
 
 type StoryResponse struct {
 	Story *Story `json:"story"`
 }
 
-func LoadStory(ctx context.Context, client *http.Client, id string) (*Story, error) {
+func LoadStory(
+	ctx context.Context,
+	logger *slog.Logger,
+	client *http.Client,
+	id string,
+) (*Story, error) {
 	exp := regexp.MustCompile("stories/[0-9]+")
 	reqStr := exp.ReplaceAllString(constdef.RequestStory, fmt.Sprintf("stories/%v", id))
 	req, err := httputil.ParseRequest(ctx, reqStr, nil)
@@ -53,7 +59,7 @@ func LoadStory(ctx context.Context, client *http.Client, id string) (*Story, err
 	defer func(reader *gzip.Reader) {
 		err := reader.Close()
 		if err != nil {
-			slog.ErrorContext(ctx, "unable to close gzip reader", err)
+			logger.ErrorContext(ctx, "unable to close gzip reader", "error", err)
 		}
 	}(reader)
 
@@ -61,6 +67,7 @@ func LoadStory(ctx context.Context, client *http.Client, id string) (*Story, err
 	if err != nil {
 		return nil, xerrors.Errorf("unable to read story json: %w", err)
 	}
+	logger.DebugContext(ctx, "story json read", "json", string(storyJson))
 
 	var storyResponse *StoryResponse
 	err = json.Unmarshal(storyJson, &storyResponse)
